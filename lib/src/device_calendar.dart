@@ -11,8 +11,15 @@ import 'common/channel_constants.dart';
 import 'common/error_codes.dart';
 import 'common/error_messages.dart';
 
+/// Optional observer for errors normally printed by the plugin. Arguments and
+/// calendar contents are deliberately excluded. Observer failures are ignored.
+typedef DeviceCalendarDiagnosticListener = void Function(
+    String operation, Object error, StackTrace stack);
+
 /// Provides functionality for working with device calendar(s)
 class DeviceCalendarPlugin {
+  /// Called for caught errors; leaving it null preserves console-only reporting.
+  DeviceCalendarDiagnosticListener? diagnosticListener;
   static const MethodChannel channel =
       MethodChannel(ChannelConstants.channelName);
 
@@ -400,7 +407,8 @@ class DeviceCalendarPlugin {
     final result = await _invokeChannelMethod(
       ChannelConstants.methodNameUpdateCalendarColor,
       arguments: () => <String, dynamic>{
-        ChannelConstants.parameterNameCalendarId: Platform.isAndroid ? int.tryParse(calendarId) : calendarId,
+        ChannelConstants.parameterNameCalendarId:
+            Platform.isAndroid ? int.tryParse(calendarId) : calendarId,
         ChannelConstants.parameterNameCalendarColorKey: calendarColor?.colorKey,
         ChannelConstants.parameterNameCalendarColor: color?.value,
       },
@@ -439,6 +447,11 @@ class DeviceCalendarPlugin {
         result.data = rawData;
       }
     } catch (e, s) {
+      try {
+        diagnosticListener?.call(channelMethodName, e, s);
+      } catch (_) {
+        // Observability must not change the original plugin result.
+      }
       if (e is ArgumentError) {
         debugPrint(
             "INVOKE_CHANNEL_METHOD_ERROR! Name: ${e.name}, InvalidValue: ${e.invalidValue}, Message: ${e.message}, ${e.toString()}");
